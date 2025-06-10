@@ -33,7 +33,7 @@ import pandas as pd
 import scipy
 import yaml
 # from dask import compute, delayed
-# from dask.diagnostics import ProgressBar
+#from dask.diagnostics import ProgressBar
 from dask.distributed import as_completed, progress
 from dask_jobqueue import SLURMCluster
 from distributed import Client, LocalCluster
@@ -44,12 +44,62 @@ from cosipy.config import Config, SlurmConfig
 from cosipy.constants import Constants
 from cosipy.cpkernel.cosipy_core import cosipy_core
 from cosipy.cpkernel.io import IOClass
+import tracemalloc
+LOG_FILE = "memory_usage.log"
+import time
+import threading
+import gc
+import os
+os.environ["MALLOC_TRIM_THRESHOLD_"] = "500000"
 
+import os
+
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+
+def log_memory_usage():
+    
+    with open(LOG_FILE, "a") as log_file:
+        l=0
+        tracemalloc.start()
+        while True:
+            # Take a snapshot of memory usage
+            
+            print(l)
+            l+=1
+            time.sleep(4)
+            snapshot = tracemalloc.take_snapshot()
+            top_stats = snapshot.statistics("traceback")
+            # Log memory usage summary
+            current, peak = tracemalloc.get_traced_memory()
+            log_file.write(f"Current memory usage: {current / (1024 ** 2):.2f} MB\n")
+            log_file.write(f"Peak memory usage: {peak / (1024 ** 2):.2f} MB\n")
+            log_file.write("[ Full Tracebacks of Top Memory Consumers ]\n")
+
+            # Log the full traceback for each of the top memory allocations
+            for k in range(10):  # Limit to top 10 for clarity
+                stat=top_stats[k]
+                log_file.write(f"Memory Block: {stat.size / 1024:.2f} KB\n")
+                for line in stat.traceback.format():
+                    log_file.write(f"{line}\n")
+                log_file.write("\n")
+            #tracemalloc.stop()
+            log_file.write("=" * 50 + "\n")
+            log_file.flush()
+
+            # Wait for 1 minutes before logging again
+            time.sleep(120)
+            
 
 def main():
     Config()
     Constants()
-
+    # logger_thread = threading.Thread(target=log_memory_usage, daemon=True)
+    # logger_thread.start()
     start_logging()
 
     #------------------------------------------
@@ -65,7 +115,8 @@ def main():
     #----------------------------------------------
     # Calculation - Multithreading using all cores
     #----------------------------------------------
-
+    
+    
     # Auxiliary variables for futures
     futures = []
 
@@ -93,7 +144,13 @@ def main():
             run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures)
 
     else:
-        with LocalCluster(scheduler_port=Config.local_port, n_workers=Config.workers, local_directory='logs/dask-worker-space', threads_per_worker=1, silence_logs=True) as cluster:
+        if Config.max_memory_per_worker=="None" or Config.max_memory_per_worker is None:
+            memory_limit=None
+        else:
+            memory_limit=Config.max_memory_per_worker
+        with LocalCluster(scheduler_port=Config.local_port, n_workers=Config.workers, 
+                          local_directory='logs/dask-worker-space', threads_per_worker=1, 
+                          silence_logs=True,memory_limit=memory_limit) as cluster:
             print(cluster)
             run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures)
 
@@ -147,7 +204,6 @@ def main():
     run_time = duration_run.total_seconds()
     print(f"\tTotal run duration: {run_time // 60.0:4g} minutes {run_time % 60.0:2g} seconds\n")
     print_notice(msg="\tSIMULATION WAS SUCCESSFUL")
-
 
 def run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures):
     Config()
@@ -267,7 +323,7 @@ def run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures):
                     )
         # Finally, do the calculations and print the progress
         progress(futures)
-
+        print('Finished Multiprocessing!')
         #---------------------------------------
         # Guarantee that restart file is closed
         #---------------------------------------
@@ -283,31 +339,25 @@ def run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures):
         #---------------------------------------
         # Assign local results to global
         #---------------------------------------
+        k=0
         for future in as_completed(futures):
-
+            k+=1
+            print (k)
+            future.result()
             # Get the results from the workers
-            indY, indX, local_restart, RAIN, SNOWFALL, LWin, LWout, H, LE, B, \
-                QRR, MB, surfMB, Q, SNOWHEIGHT, TOTALHEIGHT, TS, ALBEDO, \
-                NLAYERS, ME, intMB, EVAPORATION, SUBLIMATION, CONDENSATION, \
-                DEPOSITION, REFREEZE, subM, Z0, surfM, new_snow_height, new_snow_timestamp, old_snow_timestamp, MOL, LAYER_HEIGHT, \
-                LAYER_RHO, LAYER_T, LAYER_LWC, LAYER_CC, LAYER_POROSITY, \
-                LAYER_ICE_FRACTION, LAYER_IRREDUCIBLE_WATER, LAYER_REFREEZE, \
-                stake_names, stat, df_eval = future.result()
+            indY, indX, local_restart, result_dict, stake_names, stat, df_eval = future.result()
 
-            IO.copy_local_to_global(
-                indY, indX, RAIN, SNOWFALL, LWin, LWout, H, LE, B, QRR, MB, surfMB, Q,
-                SNOWHEIGHT, TOTALHEIGHT, TS, ALBEDO, NLAYERS, ME, intMB, EVAPORATION,
-                SUBLIMATION, CONDENSATION, DEPOSITION, REFREEZE, subM, Z0, surfM, MOL,
-                LAYER_HEIGHT, LAYER_RHO, LAYER_T, LAYER_LWC, LAYER_CC, LAYER_POROSITY,
-                LAYER_ICE_FRACTION, LAYER_IRREDUCIBLE_WATER, LAYER_REFREEZE)
-
-            IO.copy_local_restart_to_global(indY,indX,local_restart)
+            IO.copy_local_to_global(indY, indX, result_dict)
+            IO.copy_local_restart_to_global(indY, indX, local_restart)
 
             # Write results to file
             IO.write_results_to_file()
-
+            
             # Write restart data to file
             IO.write_restart_to_file()
+            
+            del result_dict
+            gc.collect()
 
             if Config.stake_evaluation:
                 # Store evaluation of stake measurements to dataframe
