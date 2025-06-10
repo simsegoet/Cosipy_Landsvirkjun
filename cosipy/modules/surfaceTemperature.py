@@ -22,7 +22,7 @@ water_density = Constants.water_density
 WRF_X_CSPY = Config.WRF_X_CSPY
 
 
-def update_surface_temperature(GRID, dt, z, z0, T2, rH2, p, SWnet, u2, RAIN, SLOPE, LWin=None, N=None):
+def update_surface_temperature(GRID, dt, z, z0, T2, rH2, p, SWnet, u2, RAIN, SLOPE, LWin=None, N=None, z_u=None):
     """Solve the surface temperature and get the surface fluxes.
 
     Implemented minimisation methods:
@@ -46,6 +46,7 @@ def update_surface_temperature(GRID, dt, z, z0, T2, rH2, p, SWnet, u2, RAIN, SLO
         SLOPE (float): Slope of the surface [degree].
         LWin (float): Incoming longwave radiation [|W m^-2|].
         N (float): Fractional cloud cover [-].
+        z_u (float): Measurement height of wind speed [m] if None, it will be the same as z.
 
     Returns:
         tuple:
@@ -68,6 +69,7 @@ def update_surface_temperature(GRID, dt, z, z0, T2, rH2, p, SWnet, u2, RAIN, SLO
     Raises:
         NotImplementedError: Invalid method for minimizing the residual.
     """
+
     
     # Interpolate subsurface temperatures to selected subsurface depths for GHF computation
     B_Ts = interp_subT(GRID)
@@ -118,7 +120,7 @@ def update_surface_temperature(GRID, dt, z, z0, T2, rH2, p, SWnet, u2, RAIN, SLO
         minimisation_function = res.fun
     GRID.set_node_temperature(0, surface_temperature)
  
-    (Li, Lo, H, L, B, Qrr, rho, Lv, MOL, Cs_t, Cs_q, q0, q2) = eb_fluxes(GRID, surface_temperature, dt,  z, z0, T2, rH2, p, u2, RAIN, SLOPE, B_Ts, LWin, N)
+    (Li, Lo, H, L, B, Qrr, rho, Lv, MOL, Cs_t, Cs_q, q0, q2) = eb_fluxes(GRID, surface_temperature, dt,  z, z0, T2, rH2, p, u2, RAIN, SLOPE, B_Ts, LWin, N, z_u=z_u)
      
     # Consistency check
     if (surface_temperature > zero_temperature) or (surface_temperature < lower_bnd_ts):
@@ -244,7 +246,7 @@ def get_saturation_vapor_pressure(T_0: float, T_2: float) -> tuple:
 
 
 @njit
-def eb_fluxes(GRID, T0, dt, z, z0, T2, rH2, p, u2, RAIN, SLOPE, B_Ts, LWin=None, N=None):
+def eb_fluxes(GRID, T0, dt, z, z0, T2, rH2, p, u2, RAIN, SLOPE, B_Ts, LWin=None, N=None, z_u=None):
     """Get the surface fluxes and apply the Monin-Obukhov stability correction.
 
     Args:
@@ -262,6 +264,7 @@ def eb_fluxes(GRID, T0, dt, z, z0, T2, rH2, p, u2, RAIN, SLOPE, B_Ts, LWin=None,
         B_Ts (np.ndarray): Subsurface temperatures at interpolation depths [K].
         LWin (float): Incoming longwave radiation [|W m^-2|].
         N (float): Fractional cloud cover [-].
+        z_u (float): Measurement height of wind speed [m] if None, it will be the same as z.
 
     Returns:
         tuple:
@@ -279,7 +282,7 @@ def eb_fluxes(GRID, T0, dt, z, z0, T2, rH2, p, u2, RAIN, SLOPE, B_Ts, LWin=None,
         :q0: Mixing ratio at the surface [|kg kg^-1|].
         :q2: Mixing ratio at measurement height [|kg kg^-1|].
     """
-
+    if z_u is None: z_u=z
     # Saturation vapour pressure (hPa)
     Ew, Ew0 = get_saturation_vapor_pressure(T_0=T0, T_2=T2)
     
@@ -332,11 +335,11 @@ def eb_fluxes(GRID, T0, dt, z, z0, T2, rH2, p, u2, RAIN, SLOPE, B_Ts, LWin=None,
         # Optimize Obukhov length
         while optim:
             # ustar with initial condition of L == x
-            ust = ustar(u2,z,z0,L)
+            ust = ustar(u2,z_u,z0,L)
         
             # Sensible heat flux for neutral conditions
             delta_phi_tq = phi_tq(z, L) - phi_tq(z0, L)
-            Cd = np.power(0.41,2.0) / np.power(np.log(z/z0) - phi_m(z,L) - phi_m(z0,L),2.0)
+            Cd = np.power(0.41,2.0) / np.power(np.log(z_u/z0) - phi_m(z_u,L) - phi_m(z0,L),2.0)
             Cs_t = 0.41*np.sqrt(Cd) / (np.log(z/z0t) - delta_phi_tq)
             Cs_q = 0.41*np.sqrt(Cd) / (np.log(z/z0q) - delta_phi_tq)
 

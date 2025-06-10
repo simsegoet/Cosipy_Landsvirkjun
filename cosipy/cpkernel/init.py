@@ -2,7 +2,11 @@ import numpy as np
 from numba import njit
 
 from cosipy.constants import Constants
-from cosipy.cpkernel.grid import Grid
+from cosipy.config import Config
+if Config.track_ages:
+    from cosipy.cpkernel.grid_agetracking import Grid
+else:
+    from cosipy.cpkernel.grid import Grid
 
 
 def init_snowpack(DATA):
@@ -64,7 +68,8 @@ def init_snowpack(DATA):
             )
             layer_T = np.array(
                 [
-                    temperature_top - dT * (initial_snowheight / nlayers) * i
+                    #temperature_top - dT * (initial_snowheight / nlayers) * i
+                    temperature_bottom - dT * np.e**(-Constants.const_init_temp*(initial_snowheight / nlayers) * i)
                     for i in range(1, nlayers + 1)
                 ]
             )
@@ -81,7 +86,8 @@ def init_snowpack(DATA):
         layer_T = np.append(
             layer_T,
             [
-                layer_T[-1] - dT * initial_glacier_layer_heights * i
+                #layer_T[-1] - dT * initial_glacier_layer_heights * i
+                temperature_bottom - dT * np.e**(-Constants.const_init_temp*(initial_snowheight / nlayers) * i)
                 for i in range(1, nlayers + 1)
             ],
         )

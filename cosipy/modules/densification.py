@@ -10,7 +10,7 @@ minimum_snow_layer_height = Constants.minimum_snow_layer_height
 zero_temperature = Constants.zero_temperature
 
 
-def densification(GRID, SLOPE, dt):
+def densification(GRID, SLOPE, dt,windspeed):
     """Apply densification to the snowpack.
 
     Implemented densification methods:
@@ -30,9 +30,11 @@ def densification(GRID, SLOPE, dt):
     Raises:
         NotImplementedError: Densification method is not allowed.
     """
-    densification_allowed = ['Boone', 'Vionnet', 'empirical', 'constant']
+    densification_allowed = ['Boone', 'Vionnet', 'empirical', 'constant','Boone_GrootZwaaftink']
     if densification_method == 'Boone':
         method_Boone(GRID,SLOPE,dt)
+    elif densification_method == 'Boone_GrootZwaaftink':
+        method_Boone_GrootZwaaftink(GRID,SLOPE,dt,windspeed)
     elif densification_method == 'Vionnet':
         method_Vionnet(GRID,SLOPE,dt)
     elif densification_method == 'empirical':
@@ -166,7 +168,126 @@ def method_Boone(GRID, SLOPE, dt):
             log_fraction_warning(GRID, idxNode, dtheta_i, dtheta_w)
 
 
+@njit
+def wind_compaction_factor_gz(
+    wind_speed: float,
+    node_depth: float,
+    wind_thresh: float = 5.0,     # [m/s]  They mention ~5 m/s threshold
+    exponent: float    = 3.0,     # dimensionless, n=3
+    d_max: float       = 0.07,    # [m], effect disappears below 7cm
+    A_enh0: float      = 5.0,     # base param (the paper doesn't give 1 number)
+    factor_2_7: float  = 2.7      # the "2.7" that multiplies A_enh0
+) -> float:
+    """
+    Returns a multiplicative factor:  1 + [A_enh(d)*(u - u0)^n],
+    after Groot Zwaaftink et al. (2013), sec. 3.2.
+    
+    - If wind_speed <= wind_thresh, factor = 1.0  (no wind effect).
+    - If node_depth >= d_max, factor = 1.0        (no wind effect).
+    - Otherwise:
+        A_enh(d) = factor_2_7 * A_enh0 * (1 - d / (1.25 * d_max))
+        factor = 1 + A_enh(d) * (wind_speed - wind_thresh)^exponent
+    
+    The actual numeric value for A_enh0 must be chosen or calibrated
+    so that final densification is realistic for your site.
 
+    The user can override these defaults if they differ from
+    the published or internally used ones. But this is the direct
+    formula from the paper, as a multiplier on the base strain rate.
+    """
+    # 1) Check wind threshold
+    if wind_speed <= wind_thresh:
+        return 1.0
+
+    # 2) depth cutoff
+    if node_depth >= d_max:
+        return 1.0
+
+    # 3) Depth function =>  [1 - (d/(1.25*d_max))]
+    frac_depth = 1.0 - (node_depth / (1.25 * d_max))
+    if frac_depth < 0.0:
+        frac_depth = 0.0
+
+    # 4) The enhancement function A_enh(d)
+    A_enh_d = factor_2_7 * A_enh0 * frac_depth
+
+    # 5) The "excess wind" => (u - u0)^n
+    u_excess = (wind_speed - wind_thresh)**exponent
+
+    # 6) Final factor => 1 + A_enh(d)*excess
+    factor = 1.0 + A_enh_d * u_excess
+    return factor
+
+@njit
+def method_Boone_GrootZwaaftink(GRID, SLOPE, dt, wind_speed):
+    """
+    Example: apply wind multiplier only to the gravitational strain,
+    not to the metamorphic term.
+    """
+
+    # Boone constants
+    c1  = 2.8e-6
+    c2  = 0.042
+    c3  = 0.046
+    c4  = 0.081
+    c5  = 0.018
+    eta0 = 3.7e7
+    rho0 = 150
+
+    M_s = 0.0
+
+    height, rho, t, lwc, icf = copy_layer_profiles(GRID)
+
+    cum_depth = 0.0
+
+    for idxNode in range(GRID.get_number_snow_layers()):
+
+        if (rho[idxNode] < snow_ice_threshold) and (height[idxNode] > minimum_snow_layer_height):
+
+            if idxNode > 0:
+                M_s += rho[idxNode - 1]*height[idxNode - 1]
+                cum_depth += height[idxNode - 1]
+            else:
+                M_s += rho[0]*(height[0] / 2.0)
+
+            eta = eta0 * np.exp(
+                c4*(zero_temperature - t[idxNode]) 
+                + c5*rho[idxNode]
+            )
+
+            # -- separate the gravitational and metamorphic parts --
+            grav_strain = (M_s * 9.81) / eta
+            meta_strain = c1 * np.exp(
+                -c2*(zero_temperature - t[idxNode])
+                - c3*np.maximum(0.0, rho[idxNode] - rho0)
+            )
+
+            # wind factor from e.g. your function 'wind_compaction_factor_gz'
+            # or inline. Suppose:
+            node_center = cum_depth + 0.5*height[idxNode]
+            wind_factor = wind_compaction_factor_gz(wind_speed, node_center)
+            
+            # Apply multiplier only to grav_strain
+            grav_with_wind = grav_strain * wind_factor
+
+            total_strain_rate = grav_with_wind + meta_strain
+
+            dRho = total_strain_rate * dt
+
+            if lwc[idxNode] == 0.0:
+                dtheta_i = dRho
+                dtheta_w = 0.0
+            else:
+                dtheta_i = 0.5*dRho
+                dtheta_w = 0.5*dRho
+
+            GRID.set_node_ice_fraction(idxNode, (1.0 + dtheta_i)*icf[idxNode])
+            GRID.set_node_liquid_water_content(idxNode, (1.0 + dtheta_w)*lwc[idxNode])
+            GRID.set_node_height(idxNode, (1.0 - dRho)*height[idxNode])
+
+            log_fraction_warning(GRID, idxNode, dtheta_i, dtheta_w)
+
+@njit
 def method_Vionnet(GRID, SLOPE, dt):
     """Densification through overburden stress.
 
@@ -197,7 +318,7 @@ def method_Vionnet(GRID, SLOPE, dt):
         if (rho[idxNode] < snow_ice_threshold) & (height[idxNode] > minimum_snow_layer_height):
 
             # Parameter f1
-            f1 = 1 / (1+60.0*(lwc[idxNode]/height[idxNode]))
+            f1 = 1 / (1+60.0*lwc[idxNode])
           
             # Snow viscosity
             eta = f1*f2*eta0*(rho[idxNode]/c)*np.exp(a*(273.14-t[idxNode])+b*rho[idxNode])
@@ -210,8 +331,11 @@ def method_Vionnet(GRID, SLOPE, dt):
                 sigma = sigma + 9.81*np.cos(SLOPE)*rho[0]*(height[0]/2.0)
 
             # Rate of change for the layer height
-            dD = (-sigma/eta)*dt 
-
+            dD = (-sigma/eta)*dt
+            
+            
+                
+                
             # Rate of change for the density
             # dRho = dD*rho[idxNode]
             
@@ -224,6 +348,17 @@ def method_Vionnet(GRID, SLOPE, dt):
             else:
                 dtheta_i = -dD/2.0
                 dtheta_w = -dD/2.0
+            
+            if (1+dtheta_i) * icf[idxNode] + (1+dtheta_w) * lwc[idxNode]>1: 
+                print('icf>1')
+                print('dD',dD)
+                print('eta',eta)
+                print('sigma',sigma)
+                print('rho',rho[idxNode])
+                print('t',t[idxNode])
+                print('lwc',lwc[idxNode])
+                print('height',height[idxNode])
+
 
             # Set new volumetric fractions
             GRID.set_node_ice_fraction(idxNode, (1+dtheta_i) * icf[idxNode])

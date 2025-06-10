@@ -209,7 +209,7 @@ class IOClass:
             Filled array with time and 2D spatial coordinates.
         """
 
-        return np.full((self.time, self.ny, self.nx), np.nan)
+        return np.full((int(self.time/Config.logging_interval), self.ny, self.nx), np.nan)
 
     def create_3d_nan_array(self, max_layers: int) -> np.ndarray:
         """Create and fill a NaN array with time, (x,y,z) dimensions.
@@ -221,7 +221,7 @@ class IOClass:
             Filled array with time and 3D spatial coordinates.
         """
 
-        return np.full((self.time, self.ny, self.nx, max_layers), np.nan)
+        return np.full((int(self.time/Config.logging_interval), self.ny, self.nx, max_layers), np.nan)
 
     def check_field(self, field, _max, _min) -> bool:
         """Check the validity of the input data."""
@@ -276,7 +276,8 @@ class IOClass:
 
         try:
             input_path = os.path.join(Config.data_path, "input", Config.input_netcdf)
-            self.DATA = xr.open_dataset(input_path)
+            self.DATA = xr.open_dataset(input_path)#'lat': 1, chunks={'lon':20} 
+            self.DATA.load()
         except FileNotFoundError:
             raise SystemExit(f"Input file not found at: {input_path}")
 
@@ -373,6 +374,8 @@ class IOClass:
             "LAYER_IF": ("-", "Layer ice fraction"),  # RESTART compatibility
             "LAYER_IRREDUCIBLE_WATER": ("-", "Irreducible water"),
             "LAYER_REFREEZE": ("m w.e.", "Refreezing"),
+            "LAYER_CREATION_AGE": ("n timesteps", "CREATION AGE"),
+            "LAYER_BURIAL_AGE": ("n timesteps", "BURIAL AGE"),
         }
 
         return metadata
@@ -415,6 +418,8 @@ class IOClass:
             "MB": ("m w.e.", "Mass balance"),
             "Q": ("m w.e.", "Runoff"),
             "SNOWHEIGHT": ("m", "Snowheight"),
+            "RHO_AVG": ("kg m^-3", "Average density above predefined mass threshold"),
+            "SDF": ("%", "Surface dust fraction"),
             "TOTALHEIGHT": ("m", "Total domain height"),
             "TS": ("K", "Surface temperature"),
             "ALBEDO": ("-", "Albedo"),
@@ -451,7 +456,7 @@ class IOClass:
 
         # Coordinates
         self.RESULT = xr.Dataset()
-        self.RESULT.coords["time"] = self.DATA.coords["time"]
+        self.RESULT.coords["time"] = self.DATA.coords["time"][Config.logging_interval-1::Config.logging_interval]
         self.RESULT.coords["lat"] = self.DATA.coords["lat"]
         self.RESULT.coords["lon"] = self.DATA.coords["lon"]
 
@@ -540,13 +545,13 @@ class IOClass:
         for name, metadata in spatiotemporal.items():
             if name in self.DATA:
                 self.add_variable_along_latlontime(
-                    self.RESULT, self.DATA[name], name, metadata[0], metadata[1]
+                    self.RESULT, self.DATA[name].isel(time=slice(None,None,Config.logging_interval)), name, metadata[0], metadata[1]
                 )
 
         if "RRR" not in self.DATA:
             self.add_variable_along_latlontime(
                 self.RESULT,
-                np.full_like(self.DATA.T2, np.nan),
+                np.full_like(self.DATA.T2.isel(time=slice(None,None,Config.logging_interval)), np.nan),
                 "RRR",
                 spatiotemporal["RRR"][1],
                 spatiotemporal["RRR"][0],
@@ -554,7 +559,7 @@ class IOClass:
         if "N" not in self.DATA:
             self.add_variable_along_latlontime(
                 self.RESULT,
-                np.full_like(self.DATA.T2, np.nan),
+                np.full_like(self.DATA.T2.isel(time=slice(None,None,Config.logging_interval)), np.nan),
                 "N",
                 spatiotemporal["N"][1],
                 spatiotemporal["N"][0],
@@ -585,92 +590,22 @@ class IOClass:
             for full_field_var in self.full:
                 self.init_full_field_attribute(full_field_var, max_layers)
 
-    def copy_local_to_global(
-        self,
-        y: int,
-        x: int,
-        local_RAIN: np.ndarray,
-        local_SNOWFALL: np.ndarray,
-        local_LWin: np.ndarray,
-        local_LWout: np.ndarray,
-        local_H: np.ndarray,
-        local_LE: np.ndarray,
-        local_B: np.ndarray,
-        local_QRR: np.ndarray,
-        local_MB: np.ndarray,
-        local_surfMB: np.ndarray,
-        local_Q: np.ndarray,
-        local_SNOWHEIGHT: np.ndarray,
-        local_TOTALHEIGHT: np.ndarray,
-        local_TS: np.ndarray,
-        local_ALBEDO: np.ndarray,
-        local_LAYERS: np.ndarray,
-        local_ME: np.ndarray,
-        local_intMB: np.ndarray,
-        local_EVAPORATION: np.ndarray,
-        local_SUBLIMATION: np.ndarray,
-        local_CONDENSATION: np.ndarray,
-        local_DEPOSITION: np.ndarray,
-        local_REFREEZE: np.ndarray,
-        local_subM: np.ndarray,
-        local_Z0: np.ndarray,
-        local_surfM: np.ndarray,
-        local_MOL: np.ndarray,
-        local_LAYER_HEIGHT: np.ndarray,
-        local_LAYER_RHO: np.ndarray,
-        local_LAYER_T: np.ndarray,
-        local_LAYER_LWC: np.ndarray,
-        local_LAYER_CC: np.ndarray,
-        local_LAYER_POROSITY: np.ndarray,
-        local_LAYER_ICE_FRACTION: np.ndarray,
-        local_LAYER_IRREDUCIBLE_WATER: np.ndarray,
-        local_LAYER_REFREEZE: np.ndarray,
-    ):
-        """Copy the local results from workers to global numpy arrays."""
-
-        self.set_atm_attribute("RAIN", local_RAIN, x, y)
-        self.set_atm_attribute("SNOWFALL", local_SNOWFALL, x, y)
-        self.set_atm_attribute("LWin", local_LWin, x, y)
-        self.set_atm_attribute("LWout", local_LWout, x, y)
-        self.set_atm_attribute("H", local_H, x, y)
-        self.set_atm_attribute("LE", local_LE, x, y)
-        self.set_atm_attribute("B", local_B, x, y)
-        self.set_atm_attribute("QRR", local_QRR, x, y)
-        self.set_atm_attribute("TS", local_TS, x, y)
-        self.set_atm_attribute("ALBEDO", local_ALBEDO, x, y)
-        self.set_atm_attribute("Z0", local_Z0, x, y)
-
-        self.set_internal_attribute("surfMB", local_surfMB, x, y)
-        self.set_internal_attribute("MB", local_MB, x, y)
-        self.set_internal_attribute("Q", local_Q, x, y)
-        self.set_internal_attribute("SNOWHEIGHT", local_SNOWHEIGHT, x, y)
-        self.set_internal_attribute("TOTALHEIGHT", local_TOTALHEIGHT, x, y)
-        self.set_internal_attribute("LAYERS", local_LAYERS, x, y)
-        self.set_internal_attribute("ME", local_ME, x, y)
-        self.set_internal_attribute("intMB", local_intMB, x, y)
-        self.set_internal_attribute("EVAPORATION", local_EVAPORATION, x, y)
-        self.set_internal_attribute("SUBLIMATION", local_SUBLIMATION, x, y)
-        self.set_internal_attribute("CONDENSATION", local_CONDENSATION, x, y)
-        self.set_internal_attribute("DEPOSITION", local_DEPOSITION, x, y)
-        self.set_internal_attribute("REFREEZE", local_REFREEZE, x, y)
-        self.set_internal_attribute("subM", local_subM, x, y)
-        self.set_internal_attribute("surfM", local_surfM, x, y)
-        self.set_internal_attribute("MOL", local_MOL, x, y)
-
-        if Config.full_field:
-            self.set_full_field_attribute("HEIGHT", local_LAYER_HEIGHT, x, y)
-            self.set_full_field_attribute("RHO", local_LAYER_RHO, x, y)
-            self.set_full_field_attribute("T", local_LAYER_T, x, y)
-            self.set_full_field_attribute("LWC", local_LAYER_LWC, x, y)
-            self.set_full_field_attribute("CC", local_LAYER_CC, x, y)
-            self.set_full_field_attribute("POROSITY", local_LAYER_POROSITY, x, y)
-            self.set_full_field_attribute(
-                "ICE_FRACTION", local_LAYER_ICE_FRACTION, x, y
-            )
-            self.set_full_field_attribute(
-                "IRREDUCIBLE_WATER", local_LAYER_IRREDUCIBLE_WATER, x, y
-            )
-            self.set_full_field_attribute("REFREEZE", local_LAYER_REFREEZE, x, y)
+    def copy_local_to_global(self, y: int, x: int, results: dict):
+        """Copy the local results from the result dictionary to global numpy arrays.
+    
+        Args:
+            y (int): y index (latitude).
+            x (int): x index (longitude).
+            results (dict): Dictionary of output variables from a gridpoint simulation.
+        """
+        for key, value in results.items():
+            if key in self.atm:
+                self.set_atm_attribute(key, value, x, y)
+            elif key in self.internal:
+                self.set_internal_attribute(key, value, x, y)
+            elif Config.full_field and key.startswith("LAYER_"):
+                var = key.replace("LAYER_", "")
+                self.set_full_field_attribute(var, value, x, y)
 
     def write_results_to_file(self):
         """Add the global numpy arrays to the RESULT dataset."""

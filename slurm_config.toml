@@ -17,7 +17,7 @@ port = 8786  # Network port number.
 cores = 1  # One grid point per core: do not change.
 nodes = 1  # Grid points submitted in one sbatch script.
 processes = 20  # Number of processes.
-memory = "4G"  # Total allocated memory per submitted Slurm job.
+memory = "8G"  # Total allocated memory per submitted Slurm job.
 
 [OVERRIDES]
 memory_per_process = 0  # Memory per process. This sets `memory` to (cores * memory_per_process.)

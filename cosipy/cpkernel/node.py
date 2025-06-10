@@ -19,15 +19,18 @@ k_w = Constants.k_w
 thermal_conductivity_method = Constants.thermal_conductivity_method
 zero_temperature = Constants.zero_temperature
 
-spec = OrderedDict()
-spec["height"] = float64
-spec["temperature"] = float64
-spec["liquid_water_content"] = float64
-spec["ice_fraction"] = float64
-spec["refreeze"] = float64
+
+spec_node = OrderedDict()
+spec_node["height"] = float64
+spec_node["temperature"] = float64
+spec_node["liquid_water_content"] = float64
+spec_node["ice_fraction"] = float64
+spec_node["refreeze"] = float64
+spec_node["sdf"] = float64  # New surface dust fraction variable
 
 
-@jitclass(spec)
+
+@jitclass(spec_node)
 class Node:
     """A ``Node`` class stores a layer's state variables.
     
@@ -51,11 +54,13 @@ class Node:
         temperature: float,
         liquid_water_content: float,
         ice_fraction: float = None,
+        sdf: float = 0
     ):
         # Initialises state variables.
         self.height = height
         self.temperature = temperature
         self.liquid_water_content = liquid_water_content
+        self.sdf = sdf  # Initialize with default value
 
         if ice_fraction is None:
             # Remove weight of air from density
@@ -116,6 +121,17 @@ class Node:
         return (
             self.get_layer_ice_fraction() * ice_density
             + self.get_layer_liquid_water_content() * water_density
+            + self.get_layer_air_porosity() * air_density
+        )
+    
+    def get_layer_density_nowater(self) -> float:
+        """Get the node's mean density including ice and liquid.
+
+        Returns:
+            Layer density [|kg m^-3|].
+        """
+        return (
+            self.get_layer_ice_fraction() * ice_density
             + self.get_layer_air_porosity() * air_density
         )
 
@@ -247,3 +263,9 @@ class Node:
             refr: Amount of refrozen water [|m w.e.|].
         """
         self.refreeze = refr
+    
+    def get_layer_sdf(self):
+        return self.sdf
+
+    def set_layer_sdf(self, sdf_value):
+        self.sdf = sdf_value

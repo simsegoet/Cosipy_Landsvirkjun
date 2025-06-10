@@ -20,6 +20,7 @@ spec["number_nodes"] = intp
 spec["new_snow_height"] = float64
 spec["new_snow_timestamp"] = float64
 spec["old_snow_timestamp"] = float64
+spec["sdf"] = float64
 spec["grid"] = types.ListType(node_type)
 
 # only required for njitted functions
@@ -35,7 +36,9 @@ remesh_method = Constants.remesh_method
 ice_density = Constants.ice_density
 water_density = Constants.water_density
 albedo_method = Constants.albedo_method
-
+max_m = Constants.m_lim
+merge_deepest_layer = Constants.merge_deepest_layer
+max_layers = Constants.max_layers
 
 @jitclass(spec)
 class Grid:
@@ -125,6 +128,7 @@ class Grid:
                     self.layer_temperatures[idxNode],
                     self.layer_liquid_water_content[idxNode],
                     layer_IF,
+                    0.0
                 )
             )
 
@@ -147,7 +151,7 @@ class Grid:
 
         # Add new node
         self.grid.insert(
-            0, Node(height, density, temperature, liquid_water_content, None)
+            0, Node(height, density, temperature, liquid_water_content, None,0.0)
         )
 
         # Increase node counter
@@ -171,11 +175,17 @@ class Grid:
         # Remove node from list when there is at least one node
         if self.grid:
             if idx is None or not idx:
+                #removed_sdf = self.grid[0].get_layer_sdf()
                 self.grid.pop(0)
                 self.number_nodes -= 1  # Decrease node counter
+                # if self.number_nodes > 0 and self.grid[0].get_layer_sdf() < removed_sdf:
+                #     self.grid[0].set_layer_sdf(removed_sdf)
             else:
                 for index in sorted(idx, reverse=True):
+                    #removed_sdf = self.grid[0].get_layer_sdf()
                     del self.grid[index]
+                    # if self.number_nodes > 0 and self.grid[index].get_layer_sdf() < removed_sdf:
+                    #     self.grid[index].set_layer_sdf(removed_sdf)
                 self.number_nodes -= len(idx)
 
     def merge_nodes(self, idx: int):
@@ -242,7 +252,10 @@ class Grid:
         ) * self.get_node_temperature(
             idx + 1
         )
-
+        
+        sdf1 = self.grid[idx].get_layer_sdf()
+        sdf2 = self.grid[idx + 1].get_layer_sdf()
+        new_sdf = max(sdf1, sdf2)  # Ensure sdf propagates correctly
         # Update node properties
         self.update_node(
             idx,
@@ -250,6 +263,7 @@ class Grid:
             new_temperature,
             new_ice_fraction,
             new_liquid_water_content,
+            new_sdf
         )
 
         # Remove the second layer
@@ -356,7 +370,7 @@ class Grid:
 
             self.update_node(idx, h0, T0, if0, lwc0)  # Update node properties
             self.grid.insert(
-                idx + 1, Node(h1, self.get_node_density(idx), T1, lwc1, if1)
+                idx + 1, Node(h1, self.get_node_density(idx), T1, lwc1, if1, self.get_node_sdf(idx))
             )
 
             self.number_nodes += 1  # Update node counter
@@ -445,6 +459,7 @@ class Grid:
         # First remesh the snowpack
         idx = 0
         merge_counter = 0
+        
         while idx < self.get_number_snow_layers() - 1:
             dT = np.abs(
                 self.get_node_temperature(idx)
@@ -453,12 +468,13 @@ class Grid:
             dRho = np.abs(
                 self.get_node_density(idx) - self.get_node_density(idx + 1)
             )
-
+            
             if (
                 (dT <= temperature_threshold_merging)
                 & (dRho <= density_threshold_merging)
                 & (self.get_node_height(idx) <= 0.1)
                 & (merge_counter <= merge_max)
+                & (abs(self.get_node_sdf(idx) - self.get_node_sdf(idx+1))<0.02 or idx > 100) #in deeper layers sdf can be ignored for merging
             ):
                 self.merge_nodes(idx)
                 merge_counter = merge_counter + 1
@@ -467,7 +483,9 @@ class Grid:
                 self.remove_node([idx])
             else:
                 idx += 1
-
+        
+        
+        
         # Remesh ice
         # remeshing layer 0 done by correct_layer above
         min_ice_idx = max(1, self.get_number_snow_layers())
@@ -483,8 +501,24 @@ class Grid:
                 self.merge_nodes(idx)
             else:
                 idx += 1
+        
+        # sdf_pre = self.get_node_sdf(0)
+        # sdf_dif = abs(self.get_node_sdf(0) - self.get_node_sdf(1))
+        # height_0 = self.get_height()[0]
+        
         self.correct_layer(0, first_layer_height)
-
+        
+        # sdf_post = self.get_node_sdf(0)
+        # if sdf_pre!=sdf_post:
+        #     print('Fail sdf_pre: ',sdf_pre)
+        #     print('sdf_post: ',sdf_post)
+        #     print(sdf_dif)
+        #     print(height_0)
+            
+        
+        
+        
+        
     def split_node(self, pos: int):
         """Split node at position.
 
@@ -504,6 +538,7 @@ class Grid:
                 self.get_node_temperature(pos),
                 self.get_node_liquid_water_content(pos) / 2.0,
                 self.get_node_ice_fraction(pos),
+                self.get_node_sdf(pos),
             ),
         )
         self.update_node(
@@ -512,12 +547,13 @@ class Grid:
             self.get_node_temperature(pos),
             self.get_node_ice_fraction(pos),
             self.get_node_liquid_water_content(pos) / 2.0,
+            self.get_node_sdf(pos)
         )
 
         self.number_nodes += 1
 
     def update_node(
-        self, idx, height, temperature, ice_fraction, liquid_water_content
+        self, idx, height, temperature, ice_fraction, liquid_water_content, sdf=None
     ):
         """Update properties of a specific node.
 
@@ -538,7 +574,11 @@ class Grid:
         self.set_node_temperature(idx, temperature)
         self.set_node_ice_fraction(idx, ice_fraction)
         self.set_node_liquid_water_content(idx, liquid_water_content)
-
+        if sdf is None:
+            self.set_node_sdf(idx,  self.get_node_sdf(idx))
+        else:
+            self.set_node_sdf(idx, sdf)
+            
     def check(self, name):
         """Check layer temperature and height are within a valid range."""
         if np.min(self.get_height()) < 0.01:
@@ -580,6 +620,7 @@ class Grid:
              maximum number of merging steps per time step is specified
              by ``merge_max``.
         """
+        
         if remesh_method == "log_profile":
             self.log_profile()
         elif remesh_method == "adaptive_profile":
@@ -587,7 +628,12 @@ class Grid:
 
         # remove the first layer if it is too small
         if self.get_node_height(0) < minimum_snow_layer_height:
-            self.remove_node([0])
+            self.merge_nodes(0)
+            
+        if merge_deepest_layer:
+            while self.get_number_layers()>= max_layers-3:
+                self.merge_nodes(self.get_number_layers()-2)
+
 
     def merge_snow_with_glacier(self, idx: int):
         """Merge a snow layer with an ice layer.
@@ -654,6 +700,8 @@ class Grid:
                     + self.get_node_liquid_water_content(idx)
                     * self.get_node_height(idx)
                 )
+                removed_sdf = self.grid[idx].get_layer_sdf()
+                if self.grid[idx].get_layer_sdf()< removed_sdf: self.grid[idx+1].set_layer_sdf(removed_sdf)
                 self.remove_node([idx])
                 melt = melt - SWE
 
@@ -775,6 +823,23 @@ class Grid:
     def set_node_refreeze(self, idx: int, refreeze: float):
         """Set the amount of refrozen water in a node."""
         self.grid[idx].set_layer_refreeze(refreeze)
+    
+    def set_node_sdf(self, idx: int, sdf: float):
+        """Set a node's sdf."""
+        self.grid[idx].set_layer_sdf(sdf)
+        
+    def set_sdf_from_surf(self, sdf: float):
+        surf_sdf = self.get_node_sdf(0)
+        self.set_node_sdf(0,sdf)
+        kmax=min(self.number_nodes,10)
+        if kmax>1:
+            for k in range(1,kmax):
+                sdf_idx=self.get_node_sdf(k)
+                if sdf_idx==surf_sdf:
+                    self.set_node_sdf(k,sdf)
+                else:
+                    break
+                
 
     def set_refreeze(self, refreeze: np.ndarray):
         """Set the refrozen water profile."""
@@ -824,7 +889,47 @@ class Grid:
             for idx in range(self.number_nodes)
             if (self.get_node_density(idx) >= snow_ice_threshold)
         ]
+    
+    def get_avg_density(self, max_m: float):
+        m=0
+        h=0
+        for idx in range(self.number_nodes):
+            lm=self.grid[idx].get_layer_height()*self.grid[idx].get_layer_density()
+            lh=self.grid[idx].get_layer_height()
 
+            if m+lm<max_m:
+                h+=lh
+                m+=lm
+                
+            else:
+                remaining_m=max_m-m
+                h+=lh*(remaining_m/lm)
+                return max_m/h
+        if m<max_m:
+            remaining_m=max_m-m
+            h+=remaining_m/ice_density
+        return max_m/h
+    
+    def get_avg_density_nowater(self, max_m: float):
+        m=0
+        h=0
+        for idx in range(self.number_nodes):
+            lm=self.grid[idx].get_layer_height()*self.grid[idx].get_layer_density_nowater() 
+            lh=self.grid[idx].get_layer_height()
+
+            if m+lm<max_m:
+                h+=lh
+                m+=lm
+                
+            else:
+                remaining_m=max_m-m
+                h+=lh*(remaining_m/lm)
+                return max_m/h
+        if m<max_m:
+            remaining_m=max_m-m
+            h+=remaining_m/ice_density
+        return max_m/h
+        
     def get_node_height(self, idx: int):
         """Get a node's layer height."""
         return self.grid[idx].get_layer_height()
@@ -843,6 +948,10 @@ class Grid:
     def get_node_liquid_water_content(self, idx: int):
         """Get a node's liquid water content."""
         return self.grid[idx].get_layer_liquid_water_content()
+    
+    def get_node_sdf(self, idx: int):
+        """Get a node's sdf."""
+        return self.grid[idx].get_layer_sdf()
 
     def get_liquid_water_content(self) -> list:
         """Get a profile of the liquid water content."""

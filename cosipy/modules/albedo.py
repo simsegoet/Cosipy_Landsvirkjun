@@ -16,10 +16,10 @@ t_star_cutoff = Constants.t_star_cutoff
 t_star_dry = Constants.t_star_dry
 t_star_wet = Constants.t_star_wet
 t_star_K = Constants.t_star_K
-
+albedo_dust = Constants.albedo_dust
 
 def updateAlbedo(
-    GRID, surface_temperature: float, albedo_snow: float
+    GRID, surface_temperature: float, albedo_snow: float, rho: float
 ) -> tuple:
     """Update the surface albedo.
 
@@ -40,11 +40,13 @@ def updateAlbedo(
         NotImplementedError: Albedo method is not allowed.
     """
 
-    albedo_allowed = ["Oerlemans98", "Bougamont05"]
+    albedo_allowed = ["Oerlemans98", "Bougamont05", "Density_derived"]
     if albedo_method == "Oerlemans98":
         alphaMod = method_Oerlemans(GRID)
     elif albedo_method == "Bougamont05":
         alphaMod, albedo_snow = method_Bougamont(GRID, surface_temperature, albedo_snow)
+    elif albedo_method == "Density_derived":
+        alphaMod = method_Density_derived(GRID, albedo_snow, rho)
     else:
         error_message = (
             f'Albedo method = "{albedo_method}"',
@@ -262,6 +264,25 @@ def method_Bougamont(GRID, surface_temperature: float, albedo_snow: float):
 
     return alphaMod, albedo_snow
 
+def rho2al(rho):
+    return -5.56220168e-12*rho**4 +  1.27091544e-08*rho**3 -9.48318922e-06*rho**2 +  1.76457100e-03*rho + 7.67773797e-01
+
+def method_Density_derived(GRID, albedo_obs, rho_surf)-> float:
+    #rho_surf = GRID.get_avg_density(m_lim)
+    sdf = GRID.get_node_sdf(0)
+    albedo_clean_snow = rho2al(rho_surf)
+    
+    if  not np.isnan(albedo_obs) and albedo_obs != 0:
+        new_sdf = (albedo_clean_snow-albedo_obs)/(albedo_clean_snow - albedo_dust)
+        if new_sdf>=0 and new_sdf <=1:
+            GRID.set_sdf_from_surf(new_sdf)
+            sdf = new_sdf
+        elif new_sdf>=-0.1 and new_sdf <0:
+            GRID.set_sdf_from_surf(0)
+            sdf = new_sdf
+
+        
+    return albedo_clean_snow*(1-sdf)+albedo_dust*(sdf)
 
 ### idea; albedo decay like (Brock et al. 2000)? or?
 ### Schmidt et al 2017 >doi:10.5194/tc-2017-67, 2017 use the same albedo parameterisation from Oerlemans and Knap 1998 with a slight updated implementation of considering the surface temperature?
