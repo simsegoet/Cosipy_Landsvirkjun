@@ -50,6 +50,22 @@ def init_nan_array_2d(nt: int, max_layers: int) -> np.ndarray:
 
     return x
 
+def count_timesteps(start_time, end_time, dt):
+    """Calc. number of steps between two times, given a timestep
+    
+    Args:
+        start_time: 
+        end_time:
+        dt: timestep in [s] (usually timestep of the input file)
+
+    Returns:
+        int    
+    """
+    start_time = pd.to_datetime(start_time)
+    end_time = pd.to_datetime(end_time)
+    nt = int((end_time - start_time).total_seconds() / dt)
+    return nt
+
 
 def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_data=None):
     """Cosipy core function.
@@ -69,9 +85,9 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         All calculated variables for one grid point.
     """
     
-    print(indY,' - ', indX)
-    
     # Declare locally for faster lookup
+    albedo_method = Constants.albedo_method  
+    time_tephra_event = Constants.time_tephra_event
     dt = Constants.dt
     max_layers = Constants.max_layers
     z = Constants.z
@@ -227,6 +243,10 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         # Create pandas dataframe for stake evaluation
         _df = pd.DataFrame(index=stake_data.index, columns=['mb','snowheight'], dtype='float')
 
+    if time_tephra_event:
+        tte = count_timesteps(Config.time_start, time_tephra_event, dt)
+
+    te = 0   #counter to see what lwin is triggered
     #--------------------------------------------
     # TIME LOOP
     #--------------------------------------------
@@ -279,7 +299,7 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         #--------------------------------------------
         # Merge grid layers, if necessary
         #--------------------------------------------
-        if Constants.albedo_method =='Density_derived': rho = GRID.get_avg_density(50) # it creates slightly more smooth results for albedo creation, if surface density is sample here
+        if albedo_method =='Density_derived': rho = GRID.get_avg_density(50) # it creates slightly more smooth results for albedo creation, if surface density is sample here
         sdf_pre = GRID.get_node_sdf(0)
         
         GRID.update_grid()
@@ -292,17 +312,19 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         #--------------------------------------------
         # Calculate albedo and roughness length changes if first layer is snow
         #--------------------------------------------
-        if Constants.albedo_method =='from_file':
+        if albedo_method =='from_file':
             alpha, albedo_snow = DATA.AL.values[t], DATA.AL.values[t]
             
-        elif Constants.albedo_method =='Density_derived':
+        elif albedo_method =='Density_derived':
             al=DATA.AL.values[t]
             if al <0: al= np.nan
-            alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,al,rho = rho)
+            alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,t,al,rho = rho)
                 
-            
-        else:
-            alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,albedo_snow)
+        else:               
+            if time_tephra_event:
+                alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,t,albedo_snow,rho = 1.0,tt = tte)
+            else:
+                alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,t,albedo_snow,rho = 1.0)
         #--------------------------------------------
         # Update roughness length
         #--------------------------------------------
@@ -325,18 +347,22 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         sw_radiation_net = SWnet - G_penetrating
         
         #try:
-        if (LWin is not None) and (N is not None):
+        if (LWin is not None) and (N is not None)and hasattr(N, "__getitem__"):
+            te=1  #couter to see what lwin is triggered
+
             # Find new surface temperature
             fun, surface_temperature, lw_radiation_in, lw_radiation_out, sensible_heat_flux, latent_heat_flux, \
                  ground_heat_flux, rain_heat_flux, rho, Lv, MOL, Cs_t, Cs_q, q0, q2 \
                  = update_surface_temperature(GRID, dt, z, z0, T2[t], RH2[t], PRES[t], sw_radiation_net, \
                  U2[t], RAIN, SLOPE, LWin=LWin[t], N=N[t], z_u = z_u)
         elif LWin is not None:
+            te=2
             fun, surface_temperature, lw_radiation_in, lw_radiation_out, sensible_heat_flux, latent_heat_flux, \
                 ground_heat_flux, rain_heat_flux, rho, Lv, MOL, Cs_t, Cs_q, q0, q2 \
                 = update_surface_temperature(GRID, dt, z, z0, T2[t], RH2[t], PRES[t], sw_radiation_net, \
                                              U2[t], RAIN, SLOPE, LWin=LWin[t], z_u = z_u)
         else:
+            te=3
             # Find new surface temperature (LW is parametrized using cloud fraction)
             fun, surface_temperature, lw_radiation_in, lw_radiation_out, sensible_heat_flux, latent_heat_flux, \
                 ground_heat_flux, rain_heat_flux, rho, Lv, MOL, Cs_t, Cs_q, q0, q2 \
@@ -530,6 +556,9 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
     RESTART.LAYER_LWC[0:GRID.get_number_layers()] = GRID.get_liquid_water_content()
     RESTART.LAYER_IF[0:GRID.get_number_layers()] = GRID.get_ice_fraction()
 
+    #print(f"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa te ist:", te) 
+
+    
     # Return a filtered dictionary instead of a fixed tuple'
     if not WRF_X_CSPY:
         return indY, indX, RESTART, results, stake_names, _stat, _df

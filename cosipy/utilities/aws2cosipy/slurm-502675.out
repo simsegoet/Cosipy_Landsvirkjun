@@ -1,0 +1,6 @@
+ERROR: Unable to locate a modulefile for 'intel64'
+ERROR: Unable to locate a modulefile for 'netcdf'
+Traceback (most recent call last):
+  File "/home/users/sgoetz/Glacier/Cosipy_jonas/cosipy/cosipy/utilities/aws2cosipy/aws2cosipy.py", line 42, in <module>
+    import dateutil
+ModuleNotFoundError: No module named 'dateutil'

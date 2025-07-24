@@ -2,13 +2,13 @@
 # Please make your changes here.
 
 [SIMULATION_PERIOD]
-time_start = "2009-01-01T06:00"
-time_end = "2009-01-10T00:00"
+time_start = "2009-01-02T06:00"
+time_end = "2011-12-10T00:00"
 
 [FILENAMES]
 data_path = "./data/"
-input_netcdf = "Zhadang/Zhadang_ERA5_2009.nc"
-output_prefix = "Zhadang_ERA5"
+input_netcdf = "Bruarjokull/Bruarjokull_2008_2018_runoff_modis_2009.nc"
+output_prefix = "Tephra_test_2d_file"
 
 [RESTART]
 restart = false # set to true if you want to start from restart file
@@ -19,6 +19,8 @@ stakes_loc_file = "./data/input/HEF/loc_stakes.csv" # path to stake location fil
 stakes_data_file = "./data/input/HEF/data_stakes_hef.csv" # path to stake data file
 eval_method = "rmse" # how to evaluate the simulations ("rmse")
 obs_type = "snowheight" # What kind of stake data is used "mb" or "snowheight"
+
+
 
 [DIMENSIONS]
 # STANDARD LAT/LON or WRF INPUT
@@ -36,6 +38,7 @@ compression_level = 2 # Choose value between 1 and 9 (highest compression)
 slurm_use = false # use SLURM
 workers = 0 # setting is used only without SLURM usage; number of workers (cores); with "0" all available cores are used
 local_port = 8786 # port for local cluster
+max_memory_per_worker="None" #"5.5GiB"# can be useful to predefine based on the number of workers, otherwise all memory is allocated for the workers, this might lead to unnecessary overflows. Use None to allocate full memory.
 
 [FULL_FIELDS]
 # WRITE FULL FIELDS
@@ -58,6 +61,10 @@ yend = 40
 
 [OUTPUT_VARIABLES]
 # Select which output variables are written to disk. Comma-separated. Edit with caution.
-output_atm = "T2,RH2,U2,RAIN,SNOWFALL,RRR,PRES,N,G,LWin,LWout,H,LE,B,QRR,Z0,ALBEDO,TS"
+output_atm = "T2,RH2,U2,RAIN,SNOWFALL,RRR,PRES,G,LWin,LWout,H,LE,B,QRR,Z0,ALBEDO,TS"  #N removed
 output_internal = "ME,MB,surfMB,intMB,EVAPORATION,SUBLIMATION,CONDENSATION,DEPOSITION,surfM,subM,Q,REFREEZE,SNOWHEIGHT,TOTALHEIGHT,LAYERS"
 output_full = "HEIGHT,RHO,T,LWC,CC,POROSITY,LW,ICE_FRACTION,IRREDUCIBLE_WATER,REFREEZE"
+
+
+track_ages = false
+logging_interval = 1

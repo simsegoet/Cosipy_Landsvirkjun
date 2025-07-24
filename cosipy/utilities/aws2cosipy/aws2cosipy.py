@@ -177,6 +177,27 @@ def set_bias(
 
     return biased_data
 
+def set_bias_mult(
+    data: np.ndarray,
+    lapse_type: str,
+    altitude: float = 0.0,
+    limit: bool = True,
+):
+    """Apply lapse rate to data.
+
+    Args:
+        data: Numerical data.
+        lapse_type: ID of lapse rate in config file.
+        altitude: The height difference between a location and sensor.
+        limit: If True, set negative values to zero. Default True.
+    """
+
+    biased_data = data + data * altitude * _cfg.lapse[lapse_type]
+    if limit:
+        biased_data = np.maximum(biased_data, 0.0)
+
+    return biased_data
+
 
 def set_variable_metadata() -> dict:
     """Initialise variable names and units."""
@@ -372,7 +393,7 @@ def create_1D_input(cs_file, cosipy_file, static_file, start_date, end_date):
     )  # Pressure
 
     if _cfg.names["RRR_var"] in df:  # Precipitation
-        RRR = set_bias(
+        RRR = set_bias_mult(
             data=df[_cfg.names["RRR_var"]].values,
             lapse_type="lapse_RRR",
             altitude=sensor_height,
@@ -380,7 +401,7 @@ def create_1D_input(cs_file, cosipy_file, static_file, start_date, end_date):
         )
 
     if _cfg.names["SNOWFALL_var"] in df:
-        SNOWFALL = set_bias(
+        SNOWFALL = set_bias_mult(
             data=df[_cfg.names["SNOWFALL_var"]].values,
             lapse_type="lapse_SNOWFALL",
             altitude=sensor_height,
@@ -574,7 +595,7 @@ def create_2D_input(
         )
 
         if _cfg.names["RRR_var"] in df:
-            RRR_interp[t, :, :] = set_bias(
+            RRR_interp[t, :, :] = set_bias_mult(
                 data=RRR[t],
                 lapse_type="lapse_RRR",
                 altitude=altitude,
@@ -582,7 +603,7 @@ def create_2D_input(
             )
 
         if _cfg.names["SNOWFALL_var"] in df:
-            SNOWFALL_interp[t, :, :] = set_bias(
+            SNOWFALL_interp[t, :, :] = set_bias_mult(
                 data=SNOWFALL[t],
                 lapse_type="lapse_SNOWFALL",
                 altitude=altitude,

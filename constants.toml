@@ -1,11 +1,13 @@
 [GENERAL]
 dt = 3600                                       # Time step in the input files [s]
 max_layers = 200                                # Max. number of layers, just for the restart file
-z = 2.0                                         # Measurement height [m]
+z = 2.0 
+z_u = 10.0
+merge_deepest_layer = true                                        # Measurement height [m]
 
 [PARAMETERIZATIONS]
 stability_correction = 'Ri'                     # possibilities: 'Ri','MO'
-albedo_method = 'Oerlemans98'                   # possibilities: 'Oerlemans98','Bougamont05'
+albedo_method = 'from_file'                   # possibilities: 'Oerlemans98','Bougamont05','from_file','Density_derived'
 densification_method = 'Boone'                  # possibilities: 'Boone','empirical','constant' TODO: solve error Vionnet
 penetrating_method = 'Bintanja95'               # possibilities: 'Bintanja95'
 roughness_method = 'Moelg12'                    # possibilities: 'Moelg12'
@@ -52,11 +54,12 @@ temperature_threshold_merging = 0.01            # If merging is true threshold f
 
 [CONSTANTS]
 constant_density = 300.0                         # constant density of freshly fallen snow [kg m-3], if densification_method is set to 'constant'
+m_lim = 20000                                   #  mass limit for determination of average density
 
 albedo_fresh_snow = 0.85                        # albedo of fresh snow [-] (Moelg et al. 2012, TC)
-albedo_firn = 0.55                              # albedo of firn [-] (Moelg et al. 2012, TC)
-albedo_ice = 0.3                                # albedo of ice [-] (Moelg et al. 2012, TC)
-albedo_mod_snow_aging = 22                      # effect of ageing on snow albedo [days] (Oerlemans and Knap 1998, J. Glaciol.)
+albedo_firn = 0.5                              # albedo of firn [-] (Moelg et al. 2012, TC)
+albedo_ice = 0.28                                # albedo of ice [-] (Moelg et al. 2012, TC)
+albedo_mod_snow_aging = 17                      # effect of ageing on snow albedo [days] (Oerlemans and Knap 1998, J. Glaciol.)
 albedo_mod_snow_depth = 3                       # effect of snow depth on albedo [cm] (Oerlemans and Knap 1998, J. Glaciol.)
 
 ### For tropical glaciers or High Mountain Asia summer-accumulation glaciers (low latitude), the Moelg et al. 2012, TC should be tested for a possible better albedo fit 
@@ -91,6 +94,25 @@ water_density = 1000.0                          # density of water [kg m^(-3)]
 ice_density = 917.0                              # density of ice [kg m^(-3)]
 air_density = 1.1                               # density of air [kg m^(-3)]
 
+
 sigma = 5.67e-8                                 # Stefan-Bolzmann constant [W m-2 K-4]
 zero_temperature = 273.16                       # Melting temperature [K]
 surface_emission_coeff = 0.99                   # surface emission coefficient [-]
+
+
+merge_deepest_layer = false
+albedo_dust = 0.1
+
+[TephraEvent]
+time_tephra_event = "2010-05-20T06:00"                          #2010-05-20T06:00
+
+tephra_albedo_fresh_snow = 0.55                        # albedo of fresh snow [-] (Moelg et al. 2012, TC)
+tephra_albedo_firn = 0.25                              # albedo of firn [-] (Moelg et al. 2012, TC)
+tephra_albedo_ice = 0.1                               # albedo of ice [-] (Moelg et al. 2012, TC)
+tephra_albedo_mod_snow_aging = 17                      # effect of ageing on snow albedo [days] (Oerlemans and Knap 1998, J. Glaciol.)
+tephra_albedo_mod_snow_depth = 3                       # effect of snow depth on albedo [cm] (Oerlemans and Knap 1998, J. Glaciol.)
+
+tephra_t_star_wet = 10                                 # albedo decay timescale (melting surface) [days]
+tephra_t_star_dry = 20                                 # albedo decay timescale (dry snow surface) [days]
+tephra_t_star_K = 10                                   # increase in t_star_dry at negative temperatures [day K-1]
+tephra_t_star_cutoff = 263.17                          # temperature threshold for t_star_dry increase [K]

@@ -161,6 +161,8 @@ def main():
     mask[mask>0]=1
     print(mask)
 
+    
+
     ## create output dataset
     ds = xr.Dataset()
     ds.coords['lon'] = dem.lon.values

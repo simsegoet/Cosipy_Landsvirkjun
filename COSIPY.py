@@ -144,12 +144,13 @@ def main():
             run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures)
 
     else:
+        local_dir = os.environ.get("COSIPY_WORKDIR")
         if Config.max_memory_per_worker=="None" or Config.max_memory_per_worker is None:
             memory_limit=None
         else:
             memory_limit=Config.max_memory_per_worker
         with LocalCluster(scheduler_port=Config.local_port, n_workers=Config.workers, 
-                          local_directory='logs/dask-worker-space', threads_per_worker=1, 
+                          local_directory=local_dir, threads_per_worker=1, 
                           silence_logs=True,memory_limit=memory_limit) as cluster:
             print(cluster)
             run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures)
@@ -339,10 +340,10 @@ def run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures):
         #---------------------------------------
         # Assign local results to global
         #---------------------------------------
-        k=0
+        #k=0
         for future in as_completed(futures):
-            k+=1
-            print (k)
+         #   k+=1
+          #  print (k)
             future.result()
             # Get the results from the workers
             indY, indX, local_restart, result_dict, stake_names, stat, df_eval = future.result()
