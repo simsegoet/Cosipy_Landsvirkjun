@@ -1,5 +1,5 @@
 *
 !.gitignore
-!DEM/n30_e090_3arc_v2.tif
-!Shapefiles/Zhadang_RGI6*
-!Zhadang_static.nc
+!DEM/vatna21_10x10m_isn93_align_lidar_zmasl_gapfilled_epsg_3057-lat_lon.tif
+!Shapefiles/Bruarjokull_shapefile/*
+!Bruarjokull_static.nc
