@@ -1,5 +1,7 @@
 *
 !.gitignore
+!DEM/
 !DEM/vatna21_10x10m_isn93_align_lidar_zmasl_gapfilled_epsg_3057-lat_lon.tif
+!Shapefiles/
 !Shapefiles/Bruarjokull_shapefile/*
 !Bruarjokull_static.nc
