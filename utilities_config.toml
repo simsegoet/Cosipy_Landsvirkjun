@@ -52,12 +52,12 @@ stationLat =  64.5679  # Latitude of station
 [aws2cosipy.lapse]
 lapse_T = -0.006  # Temp K per  m
 lapse_RH = -0.00051  # RH % per m (0 to 1)
-lapse_RRR = 0.00124 # m per m
-lapse_SNOWFALL = 0.0012 # Snowfall % per m (0 to 1)
+lapse_RRR = 0.00124 # m per m    works ok on Bruarjokull using B13 as input                     
+lapse_SNOWFALL = 0.0012 # Snowfall % per m (0 to 1)    works good on Bruarjokull using B13 as input
 
 [aws2cosipy.modis]
 enable = false
-folder = "data/Albedo"    # directory with MODIS .nc files
+folder = "data/Modis_albedo"    # directory with MODIS .nc files
 
 
 # CREATE STATIC FILE
@@ -65,7 +65,7 @@ folder = "data/Albedo"    # directory with MODIS .nc files
 static_folder = "./data/static/"
 dem_path = "DEM/vatna21_10x10m_isn93_align_lidar_zmasl_gapfilled_epsg_3057-lat_lon.tif"
 shape_path = "Shapefiles/Bruarjukull_exclus.shp"
-output_file = "Bruarjokull_static_test.nc"
+output_file = "Bruarjokull_new_static.nc"
 
 [create_static.coords]
 tile = true
@@ -85,7 +85,7 @@ lu_class = 24 # land use class for glaciers
 [landsvirkjun_data_prep.paths]
 input_path = "data/input/Bruarjokull/B16_all/"
 output_path = "data/input/Bruarjokull"
-output_filename = "B16_cal_test_300density.csv"
+output_filename = "B16_inputfile.csv"
 safe_individual_csv = false                      # safes the prepared individual input files as {input_filename}_rdy_conv.csv
 
 
