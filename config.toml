@@ -7,8 +7,8 @@ time_end = "2002-10-10T00:00"
 
 [FILENAMES]
 data_path = "./data/"
-input_netcdf = "Bruarjokull/Bruarjokull_full_glacier222_2001_2020.nc"
-output_prefix = "Bruarjokull_full_glacier_test"
+input_netcdf = "Bruarjokull/B13_input_2001_2020.nc"
+output_prefix = "B16_modeled_with_data_from_B13"
 
 [RESTART]
 restart = false # set to true if you want to start from restart file
