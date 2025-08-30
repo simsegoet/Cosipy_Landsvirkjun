@@ -161,6 +161,8 @@ def main():
     mask[mask>0]=1
     print(mask)
 
+    
+
     ## create output dataset
     ds = xr.Dataset()
     ds.coords['lon'] = dem.lon.values
@@ -186,6 +188,7 @@ def main():
 
     """Save combined static file, delete intermediate files, print
     number of glacier grid points."""
+    ds["SLOPE"] = ds["SLOPE"].fillna(0.15)
     check_for_nan(ds)
     ds.to_netcdf(output_path)
     print("Study area consists of ", np.nansum(mask[mask==1]), " glacier points")

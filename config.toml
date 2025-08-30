@@ -2,13 +2,13 @@
 # Please make your changes here.
 
 [SIMULATION_PERIOD]
-time_start = "2009-01-02T06:00"
-time_end = "2011-12-10T00:00"
+time_start = "2000-04-02T06:00"
+time_end = "2002-10-10T00:00"
 
 [FILENAMES]
 data_path = "./data/"
-input_netcdf = "Bruarjokull/Bruarjokull_2008_2018_runoff_modis_2009.nc"
-output_prefix = "Tephra_test_2d_file"
+input_netcdf = "Bruarjokull/Bruarjokull_full_glacier222_2001_2020.nc"
+output_prefix = "Bruarjokull_full_glacier_test"
 
 [RESTART]
 restart = false # set to true if you want to start from restart file

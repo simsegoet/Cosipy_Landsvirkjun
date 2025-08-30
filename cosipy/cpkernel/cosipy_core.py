@@ -95,7 +95,8 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         z_u = Constants.z_u
     except:
         z_u=None
-    mult_factor_RRR = Constants.mult_factor_RRR
+    mult_factor_snow = Constants.mult_factor_snow
+    mult_factor_rain = Constants.mult_factor_rain
     densification_method = Constants.densification_method
     ice_density = Constants.ice_density
     water_density = Constants.water_density
@@ -197,15 +198,15 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
     # Checks for optional input variables
     #--------------------------------------------
     if ('SNOWFALL' in DATA) and ('RRR' in DATA):
-        SNOWF = DATA.SNOWFALL.values * mult_factor_RRR
-        RRR = DATA.RRR.values * mult_factor_RRR
+        SNOWF = DATA.SNOWFALL.values# * mult_factor_RRR
+        RRR = DATA.RRR.values# * mult_factor_RRR
     elif 'SNOWFALL' in DATA:
-        SNOWF = DATA.SNOWFALL.values * mult_factor_RRR
+        SNOWF = DATA.SNOWFALL.values# * mult_factor_RRR
         RRR = None
         RAIN = None
     else:
         SNOWF = None
-        RRR = DATA.RRR.values * mult_factor_RRR
+        RRR = DATA.RRR.values# * mult_factor_RRR
 
     # Use RRR rather than snowfall?
     if Config.force_use_TP:
@@ -246,7 +247,7 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
     if time_tephra_event:
         tte = count_timesteps(Config.time_start, time_tephra_event, dt)
 
-    te = 0   #counter to see what lwin is triggered
+   
     #--------------------------------------------
     # TIME LOOP
     #--------------------------------------------
@@ -268,24 +269,26 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
 
         # Derive snowfall [m] and rain rates [m w.e.]
         if (SNOWF is not None) and (RRR is not None):
-            SNOWFALL = SNOWF[t]
-            RAIN = RRR[t]-SNOWFALL*(density_fresh_snow/water_density) * 1000.0
+            SNOWFALL = SNOWF[t] * mult_factor_snow
+            RAIN = (RRR[t]-SNOWF[t]*(density_fresh_snow/water_density) * 1000.0) * mult_factor_rain 
         elif SNOWF is not None:
-            SNOWFALL = SNOWF[t]
+            SNOWFALL = SNOWF[t] * mult_factor_snow
         elif RRR is not None:
             # Else convert total precipitation [mm] to snowheight [m]; liquid/solid fraction
             SNOWFALL = (RRR[t]/1000.0)*(water_density/density_fresh_snow)*(0.5*(-np.tanh(((T2[t]-zero_temperature) - center_snow_transfer_function) * spread_snow_transfer_function) + 1.0))
-            RAIN = RRR[t]-SNOWFALL*(density_fresh_snow/water_density) * 1000.0
+            RAIN = (RRR[t]-SNOWFALL*(density_fresh_snow/water_density) * 1000.0) * mult_factor_rain
+            SNOWFALL = SNOWFALL * mult_factor_snow
         else:
             raise ValueError("No SNOWFALL or RRR data provided.")
-
+        if RAIN < 0:
+                RAIN = 0
         # if snowfall is smaller than the threshold
         if SNOWFALL<minimum_snowfall:
             SNOWFALL = 0.0
 
         # if rainfall is smaller than the threshold
-        if RAIN<(minimum_snowfall*(density_fresh_snow/water_density)*1000.0):
-            RAIN = 0.0
+        #if RAIN<(minimum_snowfall*(density_fresh_snow/water_density)*1000.0):
+         #   RAIN = 0.0
 
         if SNOWFALL > 0.0:
             # Add a new snow node on top
@@ -304,6 +307,8 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         
         GRID.update_grid()
 
+        
+
         sdf_post = GRID.get_node_sdf(0)
         # if sdf_pre!=sdf_post:
         #     print(DATA.time.data[t])
@@ -313,7 +318,12 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         # Calculate albedo and roughness length changes if first layer is snow
         #--------------------------------------------
         if albedo_method =='from_file':
-            alpha, albedo_snow = DATA.AL.values[t], DATA.AL.values[t]
+            al=DATA.ALBEDO.values[t]
+            if al<0 or al>1: 
+                al= np.nan
+                #print("File contains Albedo values outside the range of 0 to 1. Replaced by nan and gapfilled")
+            alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,t,al)
+            #alpha, albedo_snow = DATA.AL.values[t], DATA.AL.values[t]
             
         elif albedo_method =='Density_derived':
             al=DATA.AL.values[t]
@@ -322,9 +332,9 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
                 
         else:               
             if time_tephra_event:
-                alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,t,albedo_snow,rho = 1.0,tt = tte)
+                alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,t,albedo_snow,tt = tte)
             else:
-                alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,t,albedo_snow,rho = 1.0)
+                alpha, albedo_snow = updateAlbedo(GRID,surface_temperature,t,albedo_snow)
         #--------------------------------------------
         # Update roughness length
         #--------------------------------------------
@@ -348,7 +358,7 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
         
         #try:
         if (LWin is not None) and (N is not None)and hasattr(N, "__getitem__"):
-            te=1  #couter to see what lwin is triggered
+            
 
             # Find new surface temperature
             fun, surface_temperature, lw_radiation_in, lw_radiation_out, sensible_heat_flux, latent_heat_flux, \
@@ -356,13 +366,13 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
                  = update_surface_temperature(GRID, dt, z, z0, T2[t], RH2[t], PRES[t], sw_radiation_net, \
                  U2[t], RAIN, SLOPE, LWin=LWin[t], N=N[t], z_u = z_u)
         elif LWin is not None:
-            te=2
+            
             fun, surface_temperature, lw_radiation_in, lw_radiation_out, sensible_heat_flux, latent_heat_flux, \
                 ground_heat_flux, rain_heat_flux, rho, Lv, MOL, Cs_t, Cs_q, q0, q2 \
                 = update_surface_temperature(GRID, dt, z, z0, T2[t], RH2[t], PRES[t], sw_radiation_net, \
                                              U2[t], RAIN, SLOPE, LWin=LWin[t], z_u = z_u)
         else:
-            te=3
+            
             # Find new surface temperature (LW is parametrized using cloud fraction)
             fun, surface_temperature, lw_radiation_in, lw_radiation_out, sensible_heat_flux, latent_heat_flux, \
                 ground_heat_flux, rain_heat_flux, rho, Lv, MOL, Cs_t, Cs_q, q0, q2 \
@@ -556,7 +566,7 @@ def cosipy_core(DATA, indY, indX, GRID_RESTART=None, stake_names=None, stake_dat
     RESTART.LAYER_LWC[0:GRID.get_number_layers()] = GRID.get_liquid_water_content()
     RESTART.LAYER_IF[0:GRID.get_number_layers()] = GRID.get_ice_fraction()
 
-    #print(f"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa te ist:", te) 
+    
 
     
     # Return a filtered dictionary instead of a fixed tuple'

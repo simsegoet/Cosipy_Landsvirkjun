@@ -3,7 +3,7 @@
 #SBATCH --job-name=cosipy_aws
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
-#SBATCH --time=1:00:00 
+#SBATCH --time=12:00:00 
 #SBATCH --mail-user=simon.goetz@student.uibk.ac.at
 #SBATCH --qos=normal
 
@@ -29,7 +29,7 @@ export LRU_MAXSIZE=1000
 
 # All commands in the EOF block run inside of the container
 # Adjust container version to your needs, they are guaranteed to never change after their respective day has passed.
-srun python -m cosipy.utilities.aws2cosipy.aws2cosipy     -i ./data/input/Bruarjokull/B13_all_rdy_conv_elaboretemweq.csv     -o ./data/input/Bruarjokull/Bruarjokull_2008_2018_01_runoff_middle.nc     -s ./data/static/Bruarjokull_static_runoff_middle_01.nc     -b 20080101 -e 20181231
+srun python -m cosipy.utilities.aws2cosipy.aws2cosipy     -i ./data/input/Bruarjokull/B13_final_all.csv     -o ./data/input/Bruarjokull/B16_full_glacier222_2001_2020.nc     -s ./data/static/Bruarjokull_static_test.nc     -b 20010101 -e 20201231
 
 
 

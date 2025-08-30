@@ -44,7 +44,7 @@ default_params = {
 
 
 def updateAlbedo(
-    GRID, surface_temperature: float, t: int,albedo_snow: float, rho: float, tt:int = None
+    GRID, surface_temperature: float, t: int,albedo_snow: float, rho: float = None, tt:int = None
 ) -> tuple:
     """Update the surface albedo.
 
@@ -52,6 +52,7 @@ def updateAlbedo(
 
         - **Oerlemans98**: Oerlemans & Knap (1998)
         - **Bougamont05**: Bougamont et al. (2005)
+        - **Density_derived**: Jonas Liebsch
 
     Args:
         GRID (Grid): Glacier data structure.
@@ -72,6 +73,8 @@ def updateAlbedo(
         alphaMod, albedo_snow = method_Bougamont(GRID, surface_temperature, albedo_snow, params)
     elif albedo_method == "Density_derived":
         alphaMod = method_Density_derived(GRID, albedo_snow, rho)
+    elif albedo_method == "from_file":
+        alphaMod = method_from_file(GRID, albedo_snow, params)
     else:
         error_message = (
             f'Albedo method = "{albedo_method}"',
@@ -275,6 +278,14 @@ def method_Density_derived(GRID, albedo_obs, rho_surf)-> float:
 
         
     return albedo_clean_snow*(1-sdf)+albedo_dust*(sdf)
+
+def method_from_file(GRID, albedo_from_file, params):
+    if not np.isnan(albedo_from_file):
+        return float(albedo_from_file)
+    else:
+        return method_Oerlemans(GRID, params)
+        
+
 
 ### idea; albedo decay like (Brock et al. 2000)? or?
 ### Schmidt et al 2017 >doi:10.5194/tc-2017-67, 2017 use the same albedo parameterisation from Oerlemans and Knap 1998 with a slight updated implementation of considering the surface temperature?

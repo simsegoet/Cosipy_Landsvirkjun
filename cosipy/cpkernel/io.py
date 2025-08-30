@@ -493,7 +493,8 @@ class IOClass:
 
         self.RESULT.attrs["Center_snow_transfer_function"] = Constants.center_snow_transfer_function
         self.RESULT.attrs["Spread_snow_transfer_function"] = Constants.spread_snow_transfer_function
-        self.RESULT.attrs["Multiplication_factor_for_RRR_or_SNOWFALL"] = Constants.mult_factor_RRR
+        self.RESULT.attrs["Multiplication_factor_snow"] = Constants.mult_factor_snow
+        self.RESULT.attrs["Multiplication_factor_rain"] = Constants.mult_factor_rain
         self.RESULT.attrs["Minimum_snow_layer_height"] = Constants.minimum_snow_layer_height
         self.RESULT.attrs["Minimum_snowfall"] = Constants.minimum_snowfall
 
@@ -512,6 +513,10 @@ class IOClass:
         self.RESULT.attrs["Albedo_ice"] = Constants.albedo_ice
         self.RESULT.attrs["Albedo_mod_snow_aging"] = Constants.albedo_mod_snow_aging
         self.RESULT.attrs["Albedo_mod_snow_depth"] = Constants.albedo_mod_snow_depth
+        self.RESULT.attrs["t_star_wet"] = Constants.t_star_wet
+        self.RESULT.attrs["t_star_dry"] = Constants.t_star_dry
+        self.RESULT.attrs["t_star_K"] = Constants.t_star_K
+        self.RESULT.attrs["t_star_cutoff"] = Constants.t_star_cutoff
         self.RESULT.attrs["Roughness_fresh_snow"] = Constants.roughness_fresh_snow
         self.RESULT.attrs["Roughness_ice"] = Constants.roughness_ice
         self.RESULT.attrs["Roughness_firn"] = Constants.roughness_firn
@@ -634,6 +639,11 @@ class IOClass:
         if Config.full_field and self.full:
                 for full_field_var in self.full:
                     layer_name = f"LAYER_{full_field_var}"
+                    info = metadata.get(layer_name)
+                    if info is None:
+                        warnings.warn(f"[FULL_FIELDS] Skipping missing metadata for {layer_name}")
+                        continue
+                    units, long_name = info
                     self.add_variable_along_latlonlayertime(
                         self.RESULT,
                         getattr(self, layer_name),

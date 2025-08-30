@@ -11,17 +11,17 @@
 
 # AWS2COSIPY
 [aws2cosipy.names]
-PRES_var = 'ps'                                 #hPa
-T2_var = 't'                                    #K
+PRES_var = 'ps'                                 # hPa
+T2_var = 't'                                    # K
 in_K = true  # input data is already in K
-RH2_var = 'rh'                                  #percent I think
-G_var = 'sw_in'                                 #W/m^2 I think
-RRR_var = 'TotalPrecipmm'                      #mm
-U2_var = 'f'                                    #m/s
-LWin_var = 'lw_in'                              # default was LWinCor_Avg idk what it is 
-SNOWFALL_var = 'Snowfallm'
+RH2_var = 'rh'                                  # % 
+G_var = 'sw_in'                                 # W/m^2 
+RRR_var = 'TotalPrecipmm'                       # mm
+U2_var = 'f'                                    # m/s
+LWin_var = 'lw_in'                              # W/m^2 
+SNOWFALL_var = 'Snowfallm'                      # m
 N_var = ''
-ALBEDO_var = 'Albedo_acc'
+ALBEDO_var = 'Albedo_acc'                       # 0 - 1
 
 [aws2cosipy.coords]
 WRF = false
@@ -40,38 +40,54 @@ zeni_thld = 89.0  # If you do not know the exact value for your location, set va
 
 [aws2cosipy.points]
 point_model = false
-plon = -16.69153
-plat = 64.39742
-hgt = 1526.0
+plon = -16.69
+plat = 64.397422
+hgt = 1527.2
 
 [aws2cosipy.station]
 stationName = 'B13'
-stationAlt = 1210.0
-stationLat = 64.5679  # Latitude of station
+stationAlt =  1211.2
+stationLat =  64.5679  # Latitude of station
 
 [aws2cosipy.lapse]
 lapse_T = -0.006  # Temp K per  m
 lapse_RH = -0.00051  # RH % per m (0 to 1)
-lapse_RRR = 0.0032  # mm per m
-lapse_SNOWFALL = 0.0011 # Snowfall % per m (0 to 1)
+lapse_RRR = 0.00124 # m per m
+lapse_SNOWFALL = 0.0012 # Snowfall % per m (0 to 1)
+
+[aws2cosipy.modis]
+enable = false
+folder = "data/Albedo"    # directory with MODIS .nc files
+
 
 # CREATE STATIC FILE
 [create_static.paths]
 static_folder = "./data/static/"
 dem_path = "DEM/vatna21_10x10m_isn93_align_lidar_zmasl_gapfilled_epsg_3057-lat_lon.tif"
-shape_path = "Shapefiles/Bruarjokull_exclus.shp"
-output_file = "Bruarjokull_static.nc"
+shape_path = "Shapefiles/Bruarjukull_exclus.shp"
+output_file = "Bruarjokull_static_test.nc"
 
 [create_static.coords]
 tile = true
 aggregate = true
-aggregate_degree = 0.075
-longitude_upper_left = -16.50
-latitude_upper_left = 64.757
-longitude_lower_right = -15.81
-latitude_lower_right = 64.46
+aggregate_degree = 0.009
+longitude_upper_left = -16.935
+latitude_upper_left = 64.78
+longitude_lower_right = -15.37
+latitude_lower_right = 64.325
 
 # WRF2COSIPY
 [wrf2cosipy.constants]
 hu = 10  # Height of WRF wind velocity
 lu_class = 24 # land use class for glaciers
+
+# LANDSVIRKJUN_DATA_PREP
+[landsvirkjun_data_prep.paths]
+input_path = "data/input/Bruarjokull/B16_all/"
+output_path = "data/input/Bruarjokull"
+output_filename = "B16_cal_test_300density.csv"
+safe_individual_csv = false                      # safes the prepared individual input files as {input_filename}_rdy_conv.csv
+
+
+
+

@@ -101,7 +101,7 @@ def main():
     # logger_thread = threading.Thread(target=log_memory_usage, daemon=True)
     # logger_thread.start()
     start_logging()
-
+    
     #------------------------------------------
     # Create input and output dataset
     #------------------------------------------
@@ -174,7 +174,21 @@ def main():
         #encoding[var] = dict(zlib=True, complevel=compression_level, dtype=dtype, scale_factor=scale_factor, add_offset=add_offset, _FillValue=FillValue)
         encoding[var] = dict(zlib=True, complevel=Config.compression_level)
     output_netcdf = set_output_netcdf_path()
-    output_path = create_data_directory(path='output')
+
+    
+    #output_path = create_data_directory(path='output')
+    # Decide where to write
+    outdir = os.environ.get("COSIPY_OUTDIR")
+    
+    # Output dir
+    output_path = os.path.join(outdir, "output") if outdir else create_data_directory(path="output")
+    os.makedirs(output_path, exist_ok=True)
+    
+    # Restart dir
+    restart_path = os.path.join(outdir, "restart") if outdir else create_data_directory(path="restart")
+    os.makedirs(restart_path, exist_ok=True)
+
+    
     IO.get_result().to_netcdf(os.path.join(output_path,output_netcdf), encoding=encoding, mode='w')
 
     encoding = dict()
@@ -187,7 +201,7 @@ def main():
         #encoding[var] = dict(zlib=True, complevel=compression_level, dtype=dtype, scale_factor=scale_factor, add_offset=add_offset, _FillValue=FillValue)
         encoding[var] = dict(zlib=True, complevel=Config.compression_level)
 
-    restart_path = create_data_directory(path='restart')
+    #restart_path = create_data_directory(path='restart')
     IO.get_restart().to_netcdf(os.path.join(restart_path,f'restart_{timestamp}.nc'), encoding=encoding)
 
     #-----------------------------------------------
@@ -340,10 +354,10 @@ def run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures):
         #---------------------------------------
         # Assign local results to global
         #---------------------------------------
-        k=0
+        #k=0
         for future in as_completed(futures):
-            k+=1
-            print (k)
+         #   k+=1
+          #  print (k)
             future.result()
             # Get the results from the workers
             indY, indX, local_restart, result_dict, stake_names, stat, df_eval = future.result()

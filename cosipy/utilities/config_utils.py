@@ -41,6 +41,7 @@ class UtilitiesConfig(TomlLoader):
         aws2cosipy: Configuration parameters for `aws2cosipy.py`.
         create_static: Configuration parameters for `create_static.py`.
         wrf2cosipy: Configuration parameters for `wrf2cosipy.py`.
+        landsvirkjun_data_prep: Configuration parameters for `landsvirkjun_data_prep.py`.
     """
 
     def __init__(self):

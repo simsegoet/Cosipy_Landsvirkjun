@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-#SBATCH --job-name=cosipy_test
+#SBATCH --job-name=001B16_cosipy_train
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
-#SBATCH --time=1:00:00 
+#SBATCH --time=12:00:00 
 #SBATCH --mail-user=simon.goetz@student.uibk.ac.at
 #SBATCH --qos=normal
 
@@ -21,24 +21,22 @@ export COSIPY_WORKDIR
 echo "Workdir for this run: $COSIPY_WORKDIR"
 
 
-
-# Link www fmaussion data here to avoid useless downloads
-mkdir -p "$COSIPY_WORKDIR/cache/cluster.klima.uni-bremen.de"
-ln -s /home/www/sgoetz "$COSIPY_WORKDIR/cache/cluster.klima.uni-bremen.de/~sgoetz"
-
-
-
 # Add other useful defaults
 export LRU_MAXSIZE=1000
 
 COSIPY_OUTDIR="/work/$SLURM_JOB_USER/$SLURM_JOB_ID/out"
+mkdir -p "$COSIPY_OUTDIR"
 export COSIPY_OUTDIR
 echo "Output dir for this run: $COSIPY_OUTDIR"
 
 
+
 # All commands in the EOF block run inside of the container
 # Adjust container version to your needs, they are guaranteed to never change after their respective day has passed.
-srun python COSIPY.py
+
+
+srun python COSIPY.py -c config.toml -x constants.toml
+
 
 # Write out
 echo "Copying files..."

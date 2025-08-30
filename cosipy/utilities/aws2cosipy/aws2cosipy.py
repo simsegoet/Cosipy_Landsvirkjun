@@ -44,9 +44,11 @@ import netCDF4 as nc
 import numpy as np
 import pandas as pd
 import xarray as xr
+import os
 
 import cosipy.modules.radCor as mod_radCor
 from cosipy.utilities.config_utils import UtilitiesConfig
+from cosipy.utilities.aws2cosipy import modis_utils
 
 _args = None
 _cfg = None
@@ -128,6 +130,10 @@ def set_order_and_type(
         dataframe[_cfg.names["SNOWFALL_var"]] = convert_to_numeric(
             dataframe[_cfg.names["SNOWFALL_var"]]
         )
+    if _cfg.names["ALBEDO_var"] in dataframe:                              
+        dataframe[_cfg.names["ALBEDO_var"]] = convert_to_numeric(
+            dataframe[_cfg.names["ALBEDO_var"]]
+        )
 
     return dataframe
 
@@ -148,6 +154,9 @@ def check_data(dataset: xr.Dataset, dataframe: pd.DataFrame):
         check(dataset.LWin, 400, 0.0)
     if _cfg.names["N_var"] in dataframe:
         check(dataset.N, 1.0, 0.0)
+        
+    if _cfg.names["ALBEDO_var"] in dataframe:
+        check(dataset.ALBEDO, 0.0, 1.0)
 
 
 def get_time_slice(dataframe, start_date, end_date):
@@ -215,6 +224,7 @@ def set_variable_metadata() -> dict:
         "SNOWFALL": ("m", "Snowfall"),
         "LWin": ("W m\u207b\xb2", "Incoming longwave radiation"),
         "N": ("%", "Cloud cover fraction"),
+        "ALBEDO": ("-", "Surface albedo"),
     }
 
     return metadata
@@ -289,6 +299,8 @@ def create_1D_input(cs_file, cosipy_file, static_file, start_date, end_date):
         df[_cfg.names["N_var"]] = np.nan
     if _cfg.names["SNOWFALL_var"] not in df:
         df[_cfg.names["SNOWFALL_var"]] = np.nan
+    if _cfg.names["ALBEDO_var"] not in df:          
+        df[_cfg.names["ALBEDO_var"]] = np.nan
 
     col_list = [
         _cfg.names["T2_var"],
@@ -300,6 +312,7 @@ def create_1D_input(cs_file, cosipy_file, static_file, start_date, end_date):
         _cfg.names["LWin_var"],
         _cfg.names["N_var"],
         _cfg.names["SNOWFALL_var"],
+        _cfg.names["ALBEDO_var"],
     ]
     df = df[col_list]
 
@@ -314,6 +327,7 @@ def create_1D_input(cs_file, cosipy_file, static_file, start_date, end_date):
             _cfg.names["LWin_var"]: "mean",
             _cfg.names["N_var"]: "mean",
             _cfg.names["SNOWFALL_var"]: nansumwrapper,
+            _cfg.names["ALBEDO_var"]: "mean",
         }
     )
     df = df.dropna(axis=1, how="all")
@@ -413,6 +427,9 @@ def create_1D_input(cs_file, cosipy_file, static_file, start_date, end_date):
 
     if _cfg.names["N_var"] in df:
         N = df[_cfg.names["N_var"]].values  # Cloud cover fraction
+        
+    if _cfg.names["ALBEDO_var"] in df:
+        ALBEDO = df[_cfg.names["ALBEDO_var"]].values 
 
     # Change aspect to south==0, east==negative, west==positive
     if static_file:
@@ -451,6 +468,22 @@ def create_1D_input(cs_file, cosipy_file, static_file, start_date, end_date):
         add_variable_along_timelatlon_point(ds=ds, var=LW, **get_variable_metadata("LWin"))
     if _cfg.names["N_var"] in df:
         add_variable_along_timelatlon_point(ds=ds, var=N, **get_variable_metadata("N"))
+    if _cfg.names["ALBEDO_var"] in df and not _cfg.modis["enable"]:                      
+        add_variable_along_timelatlon_point(ds=ds, var=ALBEDO, **get_variable_metadata("ALBEDO"))
+    elif _cfg.modis["enable"]:
+        ds = modis_utils.build_hourly_modis_overlay_from_folder(
+            modis_folder=_cfg.modis["folder"],
+            input_aws_dataset=ds,  
+            lat_min=float(ds.lat.min()),
+            lat_max=float(ds.lat.max()),
+            lon_min=float(ds.lon.min()),
+            lon_max=float(ds.lon.max()),
+            var=_cfg.names["ALBEDO_var"],
+            start_time=pd.to_datetime(ds.time.min().values),
+            end_time=pd.to_datetime(ds.time.max().values),
+        )
+        ds["ALBEDO"].attrs.setdefault("long_name", "MODIS based Surface albedo")
+        ds["ALBEDO"].attrs.setdefault("units", "-")
 
     # Write file to disk
     check_for_nan_point(ds)
@@ -803,6 +836,21 @@ def create_2D_input(
 
     # Write file to disk
     # dso.to_netcdf(cosipy_file, encoding=encoding)
+    
+    if _cfg.modis["enable"]:
+        dso = modis_utils.build_hourly_modis_overlay_from_folder(
+            modis_folder=_cfg.modis["folder"],
+            input_aws_dataset=dso,  
+            lat_min=float(dso.lat.min()),
+            lat_max=float(dso.lat.max()),
+            lon_min=float(dso.lon.min()),
+            lon_max=float(dso.lon.max()),
+            var=_cfg.names["ALBEDO_var"],
+            start_time=pd.to_datetime(dso.time.min().values),
+            end_time=pd.to_datetime(dso.time.max().values),
+        )
+
+    
     check_for_nan(dso)
     write_netcdf(dataset=dso, output_path=cosipy_file)
 
@@ -860,6 +908,7 @@ def check(field, max_bound, min_bound):
 
 
 def check_for_nan(ds):
+    ignore_vars = {"ALBEDO"}
     if _cfg.coords["WRF"] is True:
         for y, x in product(
             range(ds.dims["south_north"]), range(ds.dims["west_east"])
@@ -874,8 +923,12 @@ def check_for_nan(ds):
         for y, x in product(range(ds.dims["lat"]), range(ds.dims["lon"])):
             mask = ds.MASK.isel(lat=y, lon=x)
             if mask == 1:
-                if np.isnan(ds.isel(lat=y, lon=x).to_array()).any():
-                    raise_nan_error()
+                for var in ds.data_vars:
+                    if var not in ignore_vars:
+                        value = ds[var].isel(lat=y, lon=x)
+                        if np.isnan(value).any():
+                            raise_nan_error()
+                
 
 
 def raise_nan_error():
@@ -912,8 +965,13 @@ def set_relative_humidity_bounds(humidity):
 
 
 def check_for_nan_point(ds):
-    if np.isnan(ds.to_array()).any():
-        raise_nan_error()
+    ignore_vars = {"ALBEDO", "MASK"}  # Gaps will be filled during the cosipy run
+    for var in ds.data_vars:
+        if var not in ignore_vars:
+            if np.isnan(ds[var]).any():
+                nan_count = np.isnan(ds[var]).sum().item()
+                print(f"NaNs found in variable '{var}' count: {nan_count}")
+                raise_nan_error()
 
 
 def compute_scale_and_offset(min, max, n):
@@ -1020,6 +1078,25 @@ def get_user_arguments(parser: argparse.ArgumentParser) -> argparse.Namespace:
         const=None,
         help="Upper latitude value of the subset",
     )
+    """
+    parser.add_argument(
+        "--modis_folder", 
+        type=str, 
+        help="Path to MODIS albedo .nc files"
+    )
+    parser.add_argument(
+        "--modis_var",
+        type=str,
+        default="R_median_filter_albe_GFD",
+        help="MODIS variable name"
+    )
+    parser.add_argument(
+        "--modis_out_var",
+        type=str,
+        default="ALBEDO",
+        help="Variable name to store in COSIPY file"
+    )"""
+   
     arguments = parser.parse_args()
 
     return arguments
@@ -1067,6 +1144,8 @@ def main():
             _args.yl,
             _args.yu,
         )
+   
+        
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1 @@
+#stake     ar       d1       d2       d3      x      y    h   dw rhow   imw   ds rhos   ims  nswe bw_str bs_str ba_str bw_fld bs_fld ba_fld
