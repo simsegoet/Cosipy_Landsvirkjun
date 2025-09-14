@@ -219,6 +219,7 @@ def main():
     run_time = duration_run.total_seconds()
     print(f"\tTotal run duration: {run_time // 60.0:4g} minutes {run_time % 60.0:2g} seconds\n")
     print_notice(msg="\tSIMULATION WAS SUCCESSFUL")
+    print_notice(f"\tOutput File saved to: {os.path.join(output_path, output_netcdf)}")
 
 def run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures):
     Config()
@@ -354,10 +355,9 @@ def run_cosipy(cluster, IO, DATA, RESULT, RESTART, futures):
         #---------------------------------------
         # Assign local results to global
         #---------------------------------------
-        #k=0
+        
         for future in as_completed(futures):
-         #   k+=1
-          #  print (k)
+         
             future.result()
             # Get the results from the workers
             indY, indX, local_restart, result_dict, stake_names, stat, df_eval = future.result()

@@ -156,7 +156,7 @@ def check_data(dataset: xr.Dataset, dataframe: pd.DataFrame):
         check(dataset.N, 1.0, 0.0)
         
     if _cfg.names["ALBEDO_var"] in dataframe:
-        check(dataset.ALBEDO, 0.0, 1.0)
+        check(dataset.ALBEDO, 1.0, 0.0)
 
 
 def get_time_slice(dataframe, start_date, end_date):
@@ -316,7 +316,7 @@ def create_1D_input(cs_file, cosipy_file, static_file, start_date, end_date):
     ]
     df = df[col_list]
 
-    df = df.resample("1H").agg(
+    df = df.resample("1h").agg(
         {
             _cfg.names["T2_var"]: "mean",
             _cfg.names["RH2_var"]: "mean",

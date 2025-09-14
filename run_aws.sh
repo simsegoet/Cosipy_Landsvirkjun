@@ -29,7 +29,7 @@ export LRU_MAXSIZE=1000
 
 # All commands in the EOF block run inside of the container
 # Adjust container version to your needs, they are guaranteed to never change after their respective day has passed.
-srun python -m cosipy.utilities.aws2cosipy.aws2cosipy     -i ./data/input/Bruarjokull/B13_final_all.csv     -o ./data/input/Bruarjokull/B16_full_glacier222_2001_2020.nc     -s ./data/static/Bruarjokull_static_test.nc     -b 20010101 -e 20201231
+srun python -m cosipy.utilities.aws2cosipy.aws2cosipy     -i ./data/input/Bruarjokull/B13_merged_2001_2020.csv     -o ./data/input/Bruarjokull/B13_full_glacier2_2001_2020.nc     -s ./data/static/Bruarjokull_static_test.nc     -b 20010101 -e 20201231
 
 
 

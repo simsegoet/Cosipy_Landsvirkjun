@@ -22,3 +22,4 @@ pytest
 pytest-dependency
 python-dateutil
 tomli; python_version < '3.11'
+scikit-learn

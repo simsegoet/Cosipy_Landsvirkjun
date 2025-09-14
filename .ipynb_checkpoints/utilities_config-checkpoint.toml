@@ -38,13 +38,13 @@ tcart = 26  # Station time correction in hour angle units (1 is 4 min)
 timezone_lon = -16  # Longitude of station
 zeni_thld = 89.0  # If you do not know the exact value for your location, set value to 89.0
 
-[aws2cosipy.points]
-point_model = false
-plon = -16.69
-plat = 64.397422
-hgt = 1527.2
+[aws2cosipy.points]      # location where the glacier is modeled
+point_model = false      # Set to true if you want to simulate the whole Glacier
+plon = -16.33
+plat = 64.5679
+hgt = 1211.2
 
-[aws2cosipy.station]
+[aws2cosipy.station]     # location of the aws station
 stationName = 'B13'
 stationAlt =  1211.2
 stationLat =  64.5679  # Latitude of station
@@ -57,7 +57,7 @@ lapse_SNOWFALL = 0.0012 # Snowfall % per m (0 to 1)
 
 [aws2cosipy.modis]
 enable = false
-folder = "data/Albedo"    # directory with MODIS .nc files
+folder = "data/Modis_albedo"    # directory with MODIS .nc files
 
 
 # CREATE STATIC FILE
@@ -70,7 +70,7 @@ output_file = "Bruarjokull_static_test.nc"
 [create_static.coords]
 tile = true
 aggregate = true
-aggregate_degree = 0.009
+aggregate_degree = 0.014
 longitude_upper_left = -16.935
 latitude_upper_left = 64.78
 longitude_lower_right = -15.37
@@ -85,7 +85,7 @@ lu_class = 24 # land use class for glaciers
 [landsvirkjun_data_prep.paths]
 input_path = "data/input/Bruarjokull/B16_all/"
 output_path = "data/input/Bruarjokull"
-output_filename = "B16_cal_test_300density.csv"
+output_filename = "B16_test.csv"
 safe_individual_csv = false                      # safes the prepared individual input files as {input_filename}_rdy_conv.csv
 
 

@@ -35,7 +35,7 @@ echo "Output dir for this run: $COSIPY_OUTDIR"
 # Adjust container version to your needs, they are guaranteed to never change after their respective day has passed.
 
 
-srun python COSIPY.py -c config.toml -x constants.toml
+srun python COSIPY.py -c config.toml -x constants_B13.toml
 
 
 # Write out
