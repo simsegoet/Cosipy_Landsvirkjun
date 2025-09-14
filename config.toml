@@ -10,6 +10,7 @@ data_path = "./data/"
 input_netcdf = "Bruarjokull/B13_full_glacier_2001_2020.nc"
 output_prefix = "Bruarjokull_full_glacier"
 
+
 [RESTART]
 restart = false # set to true if you want to start from restart file
 
